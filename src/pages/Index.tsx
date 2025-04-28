@@ -1,19 +1,128 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { PlantOperationCard } from "@/components/PlantOperationCard";
 import { toast } from "@/components/ui/use-toast";
+import { CreatePlantModal } from "@/components/modals/CreatePlantModal";
+
+// Store generated QR codes to check for uniqueness
+const generatedQRCodes = new Set<string>();
+
+// Default organization that should always have full access
+const DEFAULT_ORG_ID = "pittaluga";
+const DEFAULT_ORG_NAME = "Pittaluga & fratelli";
+
+// Organization interface
+interface Organization {
+  id: string;
+  name: string;
+  fullAccess: boolean;
+}
 
 const Index = () => {
-  const [currentOrg, setCurrentOrg] = useState("philadog");
+  const [currentOrg, setCurrentOrg] = useState(DEFAULT_ORG_ID);
+  const [createPlantModalOpen, setCreatePlantModalOpen] = useState(false);
+  const [generatedQRCode, setGeneratedQRCode] = useState("");
+  const [organizations, setOrganizations] = useState<Organization[]>([
+    { id: DEFAULT_ORG_ID, name: DEFAULT_ORG_NAME, fullAccess: true },
+    { id: "supermarket", name: "Supermarket", fullAccess: false },
+  ]);
+  const [isFullAccess, setIsFullAccess] = useState(true);
 
-  const isFullAccess = currentOrg === "philadog";
+  // Fetch organizations and determine access rights
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      try {
+        const response = await fetch('http://localhost:8090/api/organizations');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch organizations');
+        }
+        
+        let data = await response.json();
+        
+        // Ensure DEFAULT_ORG always has full access
+        data = data.map((org: Organization) => {
+          if (org.id === DEFAULT_ORG_ID || org.name === DEFAULT_ORG_NAME) {
+            return { ...org, fullAccess: true };
+          }
+          return org;
+        });
+        
+        setOrganizations(data);
+      } catch (error) {
+        console.error('Error fetching organizations:', error);
+        // Keep default organizations
+      }
+    };
 
-  const handleOperation = (operation: string) => {
+    fetchOrganizations();
+  }, []);
+
+  // Update access rights when the current organization changes
+  useEffect(() => {
+    const currentOrgData = organizations.find(org => org.id === currentOrg);
+    // DEFAULT_ORG always has full access, and fall back to true if org not found
+    setIsFullAccess(currentOrgData ? currentOrgData.fullAccess : currentOrg === DEFAULT_ORG_ID);
+  }, [currentOrg, organizations]);
+
+  // Function to get the full organization name from its ID
+  const getOrgNameById = (orgId: string): string => {
+    const org = organizations.find(org => org.id === orgId);
+    return org ? org.name : orgId;
+  };
+
+  // Function to generate a random 5-digit QR code
+  const generateUniqueQRCode = (): string => {
+    let qrCode: string;
+    do {
+      // Generate a random 5-digit number
+      const randomNum = Math.floor(10000 + Math.random() * 90000);
+      qrCode = randomNum.toString();
+    } while (generatedQRCodes.has(qrCode));
+    
+    // Store the new code for future uniqueness checks
+    generatedQRCodes.add(qrCode);
+    return qrCode;
+  };
+
+  const handleOperation = async (operation: string) => {
     toast({
       title: "Operation Triggered",
       description: `${operation} operation was triggered.`,
     });
+
+    // Open the modal for Create Plant Tracking
+    if (operation === "Create Plant Tracking") {
+      // Generate a unique QR code
+      const newQRCode = generateUniqueQRCode();
+      setGeneratedQRCode(newQRCode);
+      setCreatePlantModalOpen(true);
+      return;
+    }
+
+    // Handle the Get Plant History operation
+    if (operation === "Get Plant History") {
+      try {
+        const response = await fetch('http://localhost:8090/api/basil');
+        if (!response.ok) {
+          throw new Error('Failed to fetch basil records');
+        }
+        const basilRecords = await response.json();
+        console.log("All Basil Records:", basilRecords);
+        
+        toast({
+          title: "Basil Records Retrieved",
+          description: `Found ${basilRecords.length} basil records. Check console for details.`,
+        });
+      } catch (error) {
+        console.error("Error fetching basil records:", error);
+        toast({
+          title: "Error",
+          description: `Failed to fetch basil records: ${(error as Error).message}`,
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const operations = [
@@ -71,6 +180,14 @@ const Index = () => {
           ))}
         </div>
       </main>
+
+      {/* Modal for creating plant tracking */}
+      <CreatePlantModal 
+        open={createPlantModalOpen} 
+        onOpenChange={setCreatePlantModalOpen} 
+        currentOrg={currentOrg}
+        qrCode={generatedQRCode}
+      />
     </div>
   );
 };
