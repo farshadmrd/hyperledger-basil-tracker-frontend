@@ -139,7 +139,7 @@ const Index = () => {
     {
       title: "Create Plant Tracking",
       description: "Create a new plant with QR code and organization ownership",
-      requiresFullAccess: false,
+      requiresFullAccess: true, // Changed from false to true - only producer organizations can create plants
     },
     {
       title: "Stop Plant Tracking",
@@ -195,7 +195,7 @@ const Index = () => {
       <CreatePlantModal 
         open={createPlantModalOpen} 
         onOpenChange={setCreatePlantModalOpen} 
-        currentOrg={currentOrg}
+        currentOrg={organizations.find(org => org.id === currentOrg) || { id: currentOrg, name: getOrgNameById(currentOrg), fullAccess: isFullAccess }}
         qrCode={generatedQRCode}
       />
     </div>

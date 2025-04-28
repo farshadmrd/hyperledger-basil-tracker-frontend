@@ -70,7 +70,7 @@ const useOrgNameById = (orgId: string) => {
 interface CreatePlantModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  currentOrg: string;
+  currentOrg: Organization; // Changed from string to Organization
   qrCode: string;
 }
 
@@ -107,7 +107,6 @@ interface PlantData {
 export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: CreatePlantModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { orgName: fullOrgName, isLoading: isLoadingOrg } = useOrgNameById(currentOrg);
   
   // State for status options loaded from API
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
@@ -123,8 +122,8 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
     humidity: "",    // Initialize humidity
     currentGps: "",
     currentOwner: {
-      orgId: currentOrg,
-      name: fullOrgName
+      orgId: currentOrg.id,
+      name: currentOrg.name
     },
     transportHistory: [],
     location: ""
@@ -191,18 +190,18 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
 
   // Update form data when props change (QR code or organization)
   useEffect(() => {
-    if (open && !isLoadingOrg) {
+    if (open) {
       setFormData(prev => ({
         ...prev,
         qrCode,
         creationTimestamp: Date.now(),
         currentOwner: {
-          orgId: currentOrg,
-          name: fullOrgName
+          orgId: currentOrg.id,
+          name: currentOrg.name
         }
       }));
     }
-  }, [qrCode, currentOrg, open, fullOrgName, isLoadingOrg]);
+  }, [qrCode, currentOrg, open]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -272,7 +271,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
 
       toast({
         title: "Plant Created",
-        description: `QR Code ${formData.qrCode} has been successfully registered to ${fullOrgName}.`,
+        description: `QR Code ${formData.qrCode} has been successfully registered to ${formData.currentOwner.name}.`,
       });
       
       // Close modal and reset form
@@ -301,8 +300,8 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
       humidity: "",    // Reset humidity
       currentGps: "",
       currentOwner: {
-        orgId: currentOrg,
-        name: fullOrgName
+        orgId: currentOrg.id,
+        name: currentOrg.name
       },
       transportHistory: [],
       location: ""
@@ -328,7 +327,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
               <Input
                 id="currentOwner.name"
                 name="currentOwner.name"
-                value={isLoadingOrg ? "Loading..." : formData.currentOwner.name}
+                value={formData.currentOwner.name}
                 className="col-span-3 bg-gray-100"
                 disabled
               />
