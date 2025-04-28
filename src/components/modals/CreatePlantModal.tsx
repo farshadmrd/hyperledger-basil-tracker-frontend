@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface Organization {
   id: string;
   name: string;
+  type?: string; // Added type field
   fullAccess: boolean;
 }
 
@@ -28,7 +29,16 @@ const useOrgNameById = (orgId: string) => {
   useEffect(() => {
     const fetchOrgName = async () => {
       try {
-        const response = await fetch('http://localhost:8090/api/organizations');
+        // Add timeout to prevent infinite loading if server is down
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), 5000)
+        );
+        
+        const fetchPromise = fetch('http://localhost:8090/api/organizations');
+        
+        // Race between fetch and timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+        
         if (!response.ok) {
           throw new Error('Failed to fetch organizations');
         }
@@ -37,9 +47,15 @@ const useOrgNameById = (orgId: string) => {
         const org = organizations.find(org => org.id === orgId);
         if (org) {
           setOrgName(org.name);
+        } else {
+          // If organization not found, use the ID as fallback
+          console.warn(`Organization with ID ${orgId} not found`);
+          setOrgName(orgId);
         }
       } catch (error) {
         console.error('Error fetching organization name:', error);
+        // Set a fallback name to prevent UI issues
+        setOrgName(orgId);
       } finally {
         setIsLoading(false);
       }
@@ -119,18 +135,40 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
     const fetchStatuses = async () => {
       try {
         setIsLoadingStatuses(true);
-        const response = await fetch('http://localhost:8090/api/statuses');
+        
+        // Add timeout to prevent infinite loading if server is down
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), 5000)
+        );
+        
+        const fetchPromise = fetch('http://localhost:8090/api/statuses');
+        
+        // Race between fetch and timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
         
         if (!response.ok) {
           throw new Error('Failed to fetch statuses');
         }
         
         const data = await response.json();
-        setStatusOptions(data);
+        
+        // Process status data - ensure we have string values
+        // It might be coming as an array of objects with a 'name' or 'id' property
+        const processedStatuses = data.map((status: any) => {
+          if (typeof status === 'string') {
+            return status;
+          } else if (typeof status === 'object' && status !== null) {
+            // If it's an object, extract the name or id property
+            return status.name || status.id || JSON.stringify(status);
+          }
+          return String(status); // Convert any other type to string
+        });
+        
+        setStatusOptions(processedStatuses);
         
         // Set the first status as default if available and form doesn't have a status yet
-        if (data.length > 0 && !formData.currentStatus) {
-          setFormData(prev => ({ ...prev, currentStatus: data[0] }));
+        if (processedStatuses.length > 0 && !formData.currentStatus) {
+          setFormData(prev => ({ ...prev, currentStatus: processedStatuses[0] }));
         }
       } catch (error) {
         console.error('Error fetching statuses:', error);
@@ -149,7 +187,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
     if (open) {
       fetchStatuses();
     }
-  }, [open]);
+  }, [open, formData.currentStatus]);
 
   // Update form data when props change (QR code or organization)
   useEffect(() => {
@@ -208,15 +246,29 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
         transportHistory: [initialTransport]
       };
 
-      // BREAKPOINT: This will pause execution when DevTools is open
-      debugger;
-
       // Log what would be sent to API
       console.log("Plant data to submit:", plantPayload);
 
       // Here you would make your API call to save the plant data
-      // For simulation purposes only
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        // Try to make the API call, but handle potential server issues gracefully
+        // For simulation purposes only
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // If the server is available, you would make a real API call:
+        // const response = await fetch('http://localhost:8090/api/basil', {
+        //   method: 'POST',
+        //   headers: {
+        //     'Content-Type': 'application/json',
+        //   },
+        //   body: JSON.stringify(plantPayload),
+        // });
+        // if (!response.ok) throw new Error('Server responded with an error');
+      } catch (apiError) {
+        console.error("API error:", apiError);
+        // Continue with flow - we'll still show success for demo purposes
+        // In a real app, you would throw the error to be caught by the outer catch
+      }
 
       toast({
         title: "Plant Created",
@@ -227,6 +279,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
       onOpenChange(false);
       resetForm();
     } catch (error) {
+      console.error("Error in form submission:", error);
       toast({
         title: "Error",
         description: "Failed to create plant. Please try again.",
@@ -370,7 +423,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
                 </SelectTrigger>
                 <SelectContent>
                   {isLoadingStatuses ? (
-                    <SelectItem value="">Loading...</SelectItem>
+                    <SelectItem value="loading">Loading...</SelectItem>
                   ) : (
                     statusOptions.map(status => (
                       <SelectItem key={status} value={status}>{status}</SelectItem>

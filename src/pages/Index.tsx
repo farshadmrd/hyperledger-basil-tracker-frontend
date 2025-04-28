@@ -8,13 +8,14 @@ import { CreatePlantModal } from "@/components/modals/CreatePlantModal";
 const generatedQRCodes = new Set<string>();
 
 // Default organization that should always have full access
-const DEFAULT_ORG_ID = "pittaluga";
+const DEFAULT_ORG_ID = "Pittaluga";  // Updated to capital P for consistency
 const DEFAULT_ORG_NAME = "Pittaluga & fratelli";
 
 // Organization interface
 interface Organization {
   id: string;
   name: string;
+  type?: string; // Added type field
   fullAccess: boolean;
 }
 
@@ -23,8 +24,8 @@ const Index = () => {
   const [createPlantModalOpen, setCreatePlantModalOpen] = useState(false);
   const [generatedQRCode, setGeneratedQRCode] = useState("");
   const [organizations, setOrganizations] = useState<Organization[]>([
-    { id: DEFAULT_ORG_ID, name: DEFAULT_ORG_NAME, fullAccess: true },
-    { id: "supermarket", name: "Supermarket", fullAccess: false },
+    { id: DEFAULT_ORG_ID, name: DEFAULT_ORG_NAME, type: 'producer', fullAccess: true },
+    { id: "supermarket", name: "Supermarket", type: 'retailer', fullAccess: false },
   ]);
   const [isFullAccess, setIsFullAccess] = useState(true);
 
@@ -40,11 +41,20 @@ const Index = () => {
         
         let data = await response.json();
         
-        // Ensure DEFAULT_ORG always has full access
+        // Set access based on organization type and handle special cases
         data = data.map((org: Organization) => {
-          if (org.id === DEFAULT_ORG_ID || org.name === DEFAULT_ORG_NAME) {
-            return { ...org, fullAccess: true };
+          // Special case: Pittaluga always has full access
+          if (org.id.toLowerCase() === DEFAULT_ORG_ID.toLowerCase() || 
+              org.name.toLowerCase().includes('pittaluga')) {
+            return { ...org, id: DEFAULT_ORG_ID, fullAccess: true, type: org.type || 'producer' };
           }
+          
+          // Set access based on organization type: producer = full access, retailer = limited access
+          if (org.type) {
+            const isFullAccess = org.type.toLowerCase() === 'producer';
+            return { ...org, fullAccess: isFullAccess };
+          }
+          
           return org;
         });
         
