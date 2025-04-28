@@ -38,10 +38,10 @@
 
 ```bash
 # Clone this repository
-git clone <your-repo-url>
+git clone https://github.com/yourusername/hyperledger-basil-tracker-frontend.git
 
 # Navigate to the project directory
-cd dual-view-desktop-switcher
+cd hyperledger-basil-tracker-frontend
 
 # Install dependencies
 npm install
@@ -61,10 +61,19 @@ The application will be available at `http://localhost:5173` (or another port if
 ```
 src/
 ├── components/     # Reusable UI components
-├── pages/          # Application pages
-├── lib/            # Utility functions and helpers
+│   ├── OrgSwitcher.tsx         # Organization switching component
+│   ├── PlantOperationCard.tsx  # Card for plant operations
+│   ├── PlantTracker.tsx        # Main plant tracking component
+│   ├── modals/                 # Modal components
+│   └── ui/                     # Base UI components
 ├── hooks/          # Custom React hooks
-└── data/           # Mock data and API interfaces
+│   ├── use-mobile.tsx          # Hook for mobile device detection
+│   └── use-toast.ts            # Hook for toast notifications
+├── lib/            # Utility functions and helpers
+│   └── utils.ts                # General utility functions
+└── pages/          # Application pages
+    ├── Index.tsx               # Home page
+    └── NotFound.tsx            # 404 page
 ```
 
 ## 🔧 Development
@@ -76,6 +85,22 @@ This project uses:
 - **Tailwind CSS** for styling
 - **shadcn/ui** for component library
 - **Vite** for fast development and building
+
+### Available Scripts
+
+```bash
+# Development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Run linting
+npm run lint
+```
 
 ## 🔌 API Integration
 
