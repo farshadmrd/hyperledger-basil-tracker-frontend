@@ -77,7 +77,7 @@ interface CreatePlantModalProps {
 // Owner data interface
 interface Owner {
   orgId: string;
-  name: string;
+  user: string;  // Changed from 'name' to 'user' to match the required format
 }
 
 // Transport history record interface
@@ -91,17 +91,19 @@ interface TransportRecord {
 
 // Interface based on the provided schema
 interface PlantData {
+  _id?: string;
+  rev?: string;
   qrCode: string;
   creationTimestamp: number;
-  origin: string;
+  station: string;  // Changed from 'origin' to 'station'
   currentStatus: string;
-  temperature: string; // Added temperature field
-  humidity: string;    // Added humidity field
+  temperature: string;
+  humidity: string;
   currentGps: string;
   currentOwner: Owner;
   transportHistory: TransportRecord[];
   location: string;
-  id?: string;
+  _version?: string;
 }
 
 export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: CreatePlantModalProps) {
@@ -112,22 +114,84 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
   const [isLoadingStatuses, setIsLoadingStatuses] = useState(true);
   
+  // State for station types loaded from API
+  const [stationTypes, setStationTypes] = useState<string[]>([]);
+  const [isLoadingStations, setIsLoadingStations] = useState(true);
+  
   // Initialize form data based on the schema
   const [formData, setFormData] = useState<PlantData>({
     qrCode: qrCode,
     creationTimestamp: Date.now(),
-    origin: "",
-    currentStatus: "",
-    temperature: "", // Initialize temperature
-    humidity: "",    // Initialize humidity
+    station: "greenhouse", // Default to "greenhouse"
+    currentStatus: "Created", 
+    temperature: "",
+    humidity: "",
     currentGps: "",
     currentOwner: {
       orgId: currentOrg.id,
-      name: currentOrg.name
+      user: currentOrg.name
     },
     transportHistory: [],
     location: ""
   });
+
+  // Fetch station types from API
+  useEffect(() => {
+    const fetchStationTypes = async () => {
+      try {
+        setIsLoadingStations(true);
+        
+        // Add timeout to prevent infinite loading if server is down
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), 5000)
+        );
+        
+        const fetchPromise = fetch('http://localhost:8090/api/station-types');
+        
+        // Race between fetch and timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch station types');
+        }
+        
+        const data = await response.json();
+        
+        // Process station types data - ensure we have string values
+        const processedStationTypes = data.map((station: any) => {
+          if (typeof station === 'string') {
+            return station;
+          } else if (typeof station === 'object' && station !== null) {
+            // If it's an object, extract the name or id property
+            return station.name || station.id || JSON.stringify(station);
+          }
+          return String(station); // Convert any other type to string
+        });
+        
+        setStationTypes(processedStationTypes);
+        
+        // If greenhouse isn't in the list of station types, add it
+        if (processedStationTypes.length > 0 && 
+            !processedStationTypes.some(s => s.toLowerCase() === 'greenhouse')) {
+          setStationTypes([...processedStationTypes, 'greenhouse']);
+        } else if (processedStationTypes.length === 0) {
+          // If no station types returned, use a default list
+          setStationTypes(['greenhouse', 'field', 'warehouse']);
+        }
+        
+      } catch (error) {
+        console.error('Error fetching station types:', error);
+        // Fallback to default station types if API fails
+        setStationTypes(['greenhouse', 'field', 'warehouse']);
+      } finally {
+        setIsLoadingStations(false);
+      }
+    };
+
+    if (open) {
+      fetchStationTypes();
+    }
+  }, [open]);
 
   // Fetch status options from API
   useEffect(() => {
@@ -197,7 +261,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
         creationTimestamp: Date.now(),
         currentOwner: {
           orgId: currentOrg.id,
-          name: currentOrg.name
+          user: currentOrg.name
         }
       }));
     }
@@ -230,58 +294,68 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
     setIsSubmitting(true);
 
     try {
-      // Create initial transport history entry
-      const initialTransport: TransportRecord = {
-        timestamp: Date.now(),
-        gps: formData.currentGps,
-        temperature: formData.temperature, // Use temperature from formData
-        humidity: formData.humidity,       // Use humidity from formData
-        owner: formData.currentOwner
-      };
-
-      // Add to transport history
+      // Create the plant payload according to the specific format required by the backend
       const plantPayload = {
-        ...formData,
-        transportHistory: [initialTransport]
+        id: formData.qrCode,             // Use id instead of qrCode
+        station: "greenhouse",           // Use station field as required
+        currentGps: formData.currentGps, // GPS coordinates
+        temperature: formData.temperature || "24", // Use default if empty
+        humidity: formData.humidity || "50"        // Use default if empty
       };
 
       // Log what would be sent to API
       console.log("Plant data to submit:", plantPayload);
 
-      // Here you would make your API call to save the plant data
+      // Make the actual API call to save the plant data
       try {
-        // Try to make the API call, but handle potential server issues gracefully
-        // For simulation purposes only
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const response = await fetch('http://localhost:8090/api/basil', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(plantPayload),
+        });
         
-        // If the server is available, you would make a real API call:
-        // const response = await fetch('http://localhost:8090/api/basil', {
-        //   method: 'POST',
-        //   headers: {
-        //     'Content-Type': 'application/json',
-        //   },
-        //   body: JSON.stringify(plantPayload),
-        // });
-        // if (!response.ok) throw new Error('Server responded with an error');
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error('Server error response:', errorData);
+          throw new Error(`Server responded with error ${response.status}: ${errorData}`);
+        }
+        
+        // Check if there's any content to parse
+        const contentType = response.headers.get("content-type");
+        let createdPlant;
+        
+        if (contentType && contentType.includes("application/json") && response.headers.get("content-length") !== "0") {
+          try {
+            createdPlant = await response.json();
+            console.log("Plant successfully created:", createdPlant);
+          } catch (jsonError) {
+            console.warn("Response wasn't valid JSON but request succeeded:", jsonError);
+            createdPlant = { message: "Plant created successfully" };
+          }
+        } else {
+          console.log("Plant created successfully (no JSON response)");
+          createdPlant = { message: "Plant created successfully" };
+        }
+        
+        toast({
+          title: "Plant Created",
+          description: `Plant with ID ${formData.qrCode} has been successfully registered.`,
+        });
+        
+        // Close modal and reset form
+        onOpenChange(false);
+        resetForm();
       } catch (apiError) {
         console.error("API error:", apiError);
-        // Continue with flow - we'll still show success for demo purposes
-        // In a real app, you would throw the error to be caught by the outer catch
+        throw apiError; 
       }
-
-      toast({
-        title: "Plant Created",
-        description: `QR Code ${formData.qrCode} has been successfully registered to ${formData.currentOwner.name}.`,
-      });
-      
-      // Close modal and reset form
-      onOpenChange(false);
-      resetForm();
     } catch (error) {
       console.error("Error in form submission:", error);
       toast({
         title: "Error",
-        description: "Failed to create plant. Please try again.",
+        description: `Failed to create plant: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
@@ -294,14 +368,14 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
     setFormData({
       qrCode: qrCode,
       creationTimestamp: Date.now(),
-      origin: "",
-      currentStatus: "",
+      station: "greenhouse", // Default to "greenhouse"
+      currentStatus: "Created", // Default status is now "Created"
       temperature: "", // Reset temperature
       humidity: "",    // Reset humidity
       currentGps: "",
       currentOwner: {
         orgId: currentOrg.id,
-        name: currentOrg.name
+        user: currentOrg.name
       },
       transportHistory: [],
       location: ""
@@ -327,7 +401,7 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
               <Input
                 id="currentOwner.name"
                 name="currentOwner.name"
-                value={formData.currentOwner.name}
+                value={formData.currentOwner.user}
                 className="col-span-3 bg-gray-100"
                 disabled
               />
@@ -346,15 +420,13 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="origin" className="text-right">Origin</Label>
+              <Label htmlFor="station" className="text-right">Station</Label>
               <Input
-                id="origin"
-                name="origin"
-                value={formData.origin}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="Plant origin"
-                required
+                id="station"
+                name="station"
+                value="Greenhouse"
+                className="col-span-3 bg-gray-100"
+                disabled
               />
             </div>
             
@@ -410,26 +482,16 @@ export function CreatePlantModal({ open, onOpenChange, currentOrg, qrCode }: Cre
               />
             </div>
             
-            {/* Status field moved to bottom */}
+            {/* Status field moved to bottom and made disabled */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="currentStatus" className="text-right">Status</Label>
-              <Select
-                value={formData.currentStatus}
-                onValueChange={(value) => handleSelectChange("currentStatus", value)}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isLoadingStatuses ? (
-                    <SelectItem value="loading">Loading...</SelectItem>
-                  ) : (
-                    statusOptions.map(status => (
-                      <SelectItem key={status} value={status}>{status}</SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Input
+                id="currentStatus"
+                name="currentStatus"
+                value="Created"
+                className="col-span-3 bg-gray-100"
+                disabled
+              />
             </div>
           </div>
           <DialogFooter>

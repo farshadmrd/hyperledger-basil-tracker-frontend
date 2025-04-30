@@ -8,7 +8,7 @@ import { CreatePlantModal } from "@/components/modals/CreatePlantModal";
 const generatedQRCodes = new Set<string>();
 
 // Default organization that should always have full access
-const DEFAULT_ORG_ID = "Pittaluga";  // Updated to capital P for consistency
+const DEFAULT_ORG_ID = "Org1MSP";  // Updated to use the actual MSP identifier
 const DEFAULT_ORG_NAME = "Pittaluga & fratelli";
 
 // Organization interface

@@ -22,7 +22,7 @@ interface OrgSwitcherProps {
 }
 
 // Default organization that should always have full access
-const DEFAULT_ORG_ID = "Pittaluga";  // Changed to capital P for consistency
+const DEFAULT_ORG_ID = "Org1MSP";  // Changed to use the actual MSP identifier
 const DEFAULT_ORG_NAME = "Pittaluga & fratelli";
 
 export function OrgSwitcher({ currentOrg, onOrgChange }: OrgSwitcherProps) {
